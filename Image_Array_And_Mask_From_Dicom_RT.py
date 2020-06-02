@@ -26,8 +26,6 @@ def contour_worker(A):
 
 def worker_def(A):
     q, Contour_Names, associations, desc, final_out_dict = A
-    base_class = Dicom_to_Imagestack(get_images_mask=True, associations=associations,
-                                     Contour_Names=Contour_Names, desc=desc, get_dose_output=True)
     while True:
         item = q.get()
         if item is None:
@@ -36,6 +34,8 @@ def worker_def(A):
             path, iteration, out_path = item
             print(path)
             try:
+                base_class = Dicom_to_Imagestack(get_images_mask=True, associations=associations,
+                                                 Contour_Names=Contour_Names, desc=desc, get_dose_output=True)
                 base_class.Make_Contour_From_directory(PathDicom=path)
                 base_class.set_iteration(iteration)
                 base_class.write_images_annotations(out_path)
@@ -615,15 +615,22 @@ class Dicom_to_Imagestack:
             if os.path.split(dose_file)[-1].startswith('RTDOSE - PLAN'):
                 reader.SetFileName(dose_file)
                 reader.ReadImageInformation()
-                dose = reader.Execute()
+                dose_image = reader.Execute()
+                spacing = dose_image.GetSpacing()
+                origin = dose_image.GetOrigin()
+                direction = dose_image.GetDirection()
                 scaling_factor = float(reader.GetMetaData("3004|000e"))
-                dose = sitk.GetArrayFromImage(dose)*scaling_factor
+                dose = sitk.GetArrayFromImage(dose_image)*scaling_factor
                 if output is None:
                     output = dose
                 else:
                     output += dose
         if output is not None:
-            self.dose_handles.append(sitk.GetImageFromArray(output))
+            output = sitk.GetImageFromArray(output)
+            output.SetSpacing(spacing)
+            output.SetDirection(direction)
+            output.SetOrigin(origin)
+            self.dose_handles.append(output)
 
     def Make_Contour_From_directory(self, PathDicom):
         self.make_array(PathDicom)
